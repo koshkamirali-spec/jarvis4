@@ -1,0 +1,73 @@
+name: JARVIS Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build JARVIS APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Locate Flutter Project
+        shell: bash
+        run: |
+          FILE=$(find . -name pubspec.yaml \
+            -not -path '*/build/*' \
+            -not -path '*/.dart_tool/*' \
+            -print -quit)
+
+          if [ -z "$FILE" ]; then
+            echo "ERROR: pubspec.yaml not found."
+            echo "Upload the extracted JARVIS source files first."
+            exit 1
+          fi
+
+          DIR=$(dirname "$FILE")
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "Found project: $DIR"
+
+      - name: Install Dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: ${{ env.PROJECT_DIR }}
+        continue-on-error: true
+        run: flutter analyze
+
+      - name: Test
+        working-directory: ${{ env.PROJECT_DIR }}
+        continue-on-error: true
+        run: flutter test
+
+      - name: Build Debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVIS-APK
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-debug.apk
